@@ -29,6 +29,11 @@ public:
 
   void synchronize() { cudaStreamSynchronize(0); }
 
+  Type valueType() {
+    return Type::float32;
+  }
+
+
   cublasHandle_t getCublasHandle() { return cublasHandle_; }
 
   curandGenerator_t getCurandGenerator() { return curandGenerator_; }

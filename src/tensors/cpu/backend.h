@@ -21,6 +21,10 @@ public:
 
   void synchronize() {}
 
+  Type valueType() {
+    return Type::float32;
+  }
+
   std::default_random_engine& getRandomGenerator() { return gen_; }
 };
 }

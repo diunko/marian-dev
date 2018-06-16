@@ -28,7 +28,9 @@ enum class Type : size_t {
   uint64  = TypeClass::unsigned_type + 8u,
 
   float32 = TypeClass::float_type    + 4u,
-  float64 = TypeClass::float_type    + 8u
+  float64 = TypeClass::float_type    + 8u,
+
+  half = TypeClass::float_type       + 2u,
 };
 
 static inline size_t operator&(TypeClass typeClass, Type type) {
@@ -71,6 +73,8 @@ template <> inline bool matchType<uint64_t>(Type type) { return type == Type::ui
 template <> inline bool matchType<float>(Type type)  { return type == Type::float32; }
 template <> inline bool matchType<double>(Type type) { return type == Type::float64; }
 
+//template <> inline bool matchType<half>(Type type)  { return type == Type::half; }
+
 static inline std::ostream& operator<<(std::ostream& out, Type type) {
     switch (type) {
       case Type::int8:  out << "int8"; break;
@@ -85,6 +89,8 @@ static inline std::ostream& operator<<(std::ostream& out, Type type) {
 
       case Type::float32: out << "float32"; break;
       case Type::float64: out << "float64"; break;
+
+      case Type::half: out << "half"; break;
     }
     return out;
 }
@@ -104,5 +110,8 @@ template <> inline std::string request<uint64_t>() { return "uint64"; }
 
 template <> inline std::string request<float>()  { return "float32"; }
 template <> inline std::string request<double>() { return "float64"; }
+
+//template <> inline std::string request<float>()  { return "half"; }
+
 
 }

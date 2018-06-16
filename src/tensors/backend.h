@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common/definitions.h"
+#include "tensors/types.h"
 
 namespace marian {
 
@@ -20,6 +21,8 @@ public:
   virtual void setClip(float clip) {
     clip_ = clip;
   }
+
+  virtual Type valueType() = 0;
 
   float getClip() {
     return clip_;
