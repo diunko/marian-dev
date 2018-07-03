@@ -995,7 +995,7 @@ public:
     auto x = dot(inputDropped, W_);
     auto f = affine(inputDropped, Wf_, bf_);
 
-    return {x, f, input};
+    return {x, f};
   }
 
   State applyState(std::vector<Expr> xWs, State state, Expr mask = nullptr) {
@@ -1004,15 +1004,15 @@ public:
 
     auto x = xWs[0];
     auto f = xWs[1];
-    auto input = xWs[3];
 
     auto nextCellState = highway(cellState, x, f); // rename to "gate"?
     auto nextState = relu(nextCellState);
 
-    auto maskedCellState = mask ? mask * nextCellState : nextCellState;
-    auto maskedState = mask ? mask * nextState : nextState;
+    //auto maskedCellState = mask ? mask * nextCellState : nextCellState;
+    //auto maskedState = mask ? mask * nextState : nextState;
 
-    return {maskedState, maskedCellState};
+    //return {maskedState, maskedCellState};
+    return {nextState, nextCellState};
   }
 };
 
