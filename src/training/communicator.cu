@@ -227,7 +227,7 @@ Ptr<Communicator> createCommunicator(const std::vector<Ptr<ExpressionGraph>>& gr
   size_t d = graphs.size();
   if((d & (d - 1)) != 0) {
     LOG(warn, "[comm] Number of devices {} is not a power of 2 and communication might be slow with NCCL", d);
-    LOG(warn, "[comm] You can switch off NCCL with --no-nccl option", d);
+    LOG(warn, "[comm] You can switch off NCCL with the --no-nccl option", d);
   }
 
   return New<NCCLCommunicator>(graphs);
