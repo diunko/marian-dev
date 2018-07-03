@@ -1008,11 +1008,10 @@ public:
     auto nextCellState = highway(cellState, x, f); // rename to "gate"?
     auto nextState = relu(nextCellState);
 
-    //auto maskedCellState = mask ? mask * nextCellState : nextCellState;
-    //auto maskedState = mask ? mask * nextState : nextState;
+    auto maskedCellState = mask ? mask * nextCellState : nextCellState;
+    auto maskedState = mask ? mask * nextState : nextState;
 
-    //return {maskedState, maskedCellState};
-    return {nextState, nextCellState};
+    return {maskedState, maskedCellState};
   }
 };
 
