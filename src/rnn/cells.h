@@ -1012,7 +1012,6 @@ public:
     auto maskedState = mask ? mask * nextState : nextState;
 
     return {maskedState, maskedCellState};
-    //return {nextState, nextCellState};
   }
 };
 
