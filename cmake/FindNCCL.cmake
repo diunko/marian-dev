@@ -16,6 +16,9 @@ set(NCCL_LIB_PATHS
     /usr/local/cuda/lib64
     $ENV{NCCL_DIR}/lib64
     $ENV{CUDA_TOOLKIT_ROOT_DIR}/lib64
+    /usr/local/cuda/lib
+    $ENV{NCCL_DIR}/lib
+    $ENV{CUDA_TOOLKIT_ROOT_DIR}/lib
 )
 
 find_path(NCCL_INCLUDE_DIR NAMES nccl.h PATHS ${NCCL_INC_PATHS})
