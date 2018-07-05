@@ -25,7 +25,7 @@ find_path(NCCL_INCLUDE_DIR NAMES nccl.h PATHS ${NCCL_INC_PATHS})
 
 if (USE_STATIC_LIBS)
   message(STATUS "Trying to find static NCCL library")
-  find_library(NCCL_LIBRARIES NAMES nccl_static.a PATHS ${NCCL_LIB_PATHS})
+  find_library(NCCL_LIBRARIES NAMES libnccl_static.a PATHS ${NCCL_LIB_PATHS})
 else (USE_STATIC_LIBS)
   find_library(NCCL_LIBRARIES NAMES nccl PATHS ${NCCL_LIB_PATHS})
 endif (USE_STATIC_LIBS)
