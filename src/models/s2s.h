@@ -365,6 +365,10 @@ public:
     else
       logits = output_->apply(embeddings, decoderContext);
 
+auto att
+        = rnn_->at(0)->as<rnn::StackedCell>()->at(1)->as<rnn::Attention>();
+    for(auto &a : att->getAlignments())
+      debug(a);
 
     // return unormalized(!) probabilities
     auto nextState = New<DecoderState>(decoderStates, logits, state->getEncoderStates(), state->getBatch());

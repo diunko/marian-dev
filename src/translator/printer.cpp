@@ -30,7 +30,8 @@ std::string GetAlignmentString(const std::vector<size_t>& align) {
   std::stringstream alignStr;
   alignStr << " |||";
   for(size_t wIdx = 0; wIdx < align.size(); ++wIdx) {
-    alignStr << " " << wIdx << "-" << align[wIdx];
+    // display alignment as source_id-target_id
+    alignStr << " " << align[wIdx] << "-" << wIdx;
   }
   return alignStr.str();
 }

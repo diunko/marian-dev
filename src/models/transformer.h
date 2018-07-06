@@ -89,6 +89,26 @@ public:
     return reshape(output, {dimBeam, dimBatch, dimSteps, dimModel});
   }
 
+  static Expr GetHead(Expr weights, int dimBeam = 1, int headOffset = 0) {
+    
+    int dimWeights = weights->shape()[-1];
+    int dimSteps = weights->shape()[-2];
+    int dimHeads = weights->shape()[-3];
+    int dimBatchBeam = weights->shape()[-4];
+
+    ABORT_IF(headOffset >= dimHeads, "Selected head index {} out of bounds for {} heads", headOffset, dimHeads);
+    
+    int dimBatch = dimBatchBeam / dimBeam;
+
+    std::vector<size_t> rowIndices;
+    for(int i = 0; i < dimBatchBeam; ++i)
+      rowIndices.push_back(i * dimHeads + headOffset);
+
+    auto head = rows(flatten_2d(weights), rowIndices);
+
+    return transpose(reshape(head, {dimBeam, dimBatch, dimWeights, 1}), {0, 2, 1, 3});
+  }
+
   static Expr PreProcess(Ptr<ExpressionGraph> graph,
                          std::string prefix,
                          std::string ops,
@@ -157,7 +177,8 @@ public:
 
   // determine the multiplicative-attention probability and performs the associative lookup as well
   // q, k, and v have already been split into multiple heads, undergone any desired linear transform.
-  static Expr Attention(Ptr<ExpressionGraph> graph,
+  static std::tuple<Expr, Expr> 
+  Attention(Ptr<ExpressionGraph> graph,
                         Ptr<Options> options,
                         std::string prefix,
                         Expr q,              // [-4: beam depth * batch size, -3: num heads, -2: max tgt length, -1: split vector dim]
@@ -188,20 +209,22 @@ public:
       weights = dropout(weights, dropProb);
 
     // apply attention weights to values
-    return bdot(weights, v);   // [-4: beam depth * batch size, -3: num heads, -2: max tgt length, -1: split vector dim]
+    return std::make_tuple(bdot(weights, v), weights);   // [-4: beam depth * batch size, -3: num heads, -2: max tgt length, -1: split vector dim]
   }
 
-  Expr MultiHead(Ptr<ExpressionGraph> graph,
-                        Ptr<Options> options,
-                        std::string prefix,
-                        int dimOut,
-                        int dimHeads,
-                        Expr q,                          // [-4: beam depth * batch size, -3: num heads, -2: max length, -1: split vector dim]
-                        const Expr& keys,   // [-4: beam depth, -3: batch size, -2: max length, -1: vector dim]
-                        const Expr& values,
-                        const Expr& mask,  // [-4: batch size, -3: num heads broadcast=1, -2: max length broadcast=1, -1: max length]
-                        bool inference = false,
-                        bool cache = false) {
+  std::tuple<Expr, Expr>
+  MultiHead(Ptr<ExpressionGraph> graph,
+                 Ptr<Options> options,
+                 std::string prefix,
+                 int dimOut,
+                 int dimHeads,
+                 Expr q,                          // [-4: beam depth * batch size, -3: num heads, -2: max length, -1: split vector dim]
+                 const Expr& keys,   // [-4: beam depth, -3: batch size, -2: max length, -1: vector dim]
+                 const Expr& values,
+                 const Expr& mask,  // [-4: batch size, -3: num heads broadcast=1, -2: max length broadcast=1, -1: max length]
+                 bool inference = false,
+                 bool cache = false,
+                 bool collectAttention = false) {
     using namespace keywords;
 
     int dimModel = q->shape()[-1];
@@ -253,13 +276,18 @@ public:
 
     // apply multi-head attention to downscaled inputs
     // [-4: beam depth * batch size, -3: num heads, -2: max length, -1: split vector dim]
-    auto output = Attention(graph, options, prefix,
-                            qh, kh, vh,
-                            mask,
-                            inference);
+    Expr output, weights;
+    std::tie(output, weights) = Attention(graph, options, prefix,
+                                          qh, kh, vh,
+                                          mask,
+                                          inference);
 
     output = JoinHeads(output, q->shape()[-4]); // [-4: beam depth, -3: batch size, -2: max length, -1: vector dim]
-
+    
+    Expr weightsH0 = nullptr;
+    if(collectAttention)
+      weightsH0 = GetHead(weights, q->shape()[-4], 0);
+    
     int dimAtt = output->shape()[-1];
 
     bool project = !options->get<bool>("transformer-no-projection");
@@ -270,18 +298,20 @@ public:
       output = affine(output, Wo, bo);
     }
 
-    return output;
+    return std::make_tuple(output, weightsH0);
   }
 
-  Expr LayerAttention(Ptr<ExpressionGraph> graph,
-                             Ptr<Options> options,
-                             std::string prefix,
-                             Expr input,                      // [-4: beam depth, -3: batch size, -2: max length, -1: vector dim]
-                             const Expr& keys,   // [-4: beam depth=1, -3: batch size, -2: max length, -1: vector dim]
-                             const Expr& values,
-                             const Expr& mask,  // [-4: batch size, -3: num heads broadcast=1, -2: max length broadcast=1, -1: max length]
-                             bool inference = false,
-                             bool cache = false) {
+  std::tuple<Expr, Expr>
+  LayerAttention(Ptr<ExpressionGraph> graph,
+                      Ptr<Options> options,
+                      std::string prefix,
+                      Expr input,                      // [-4: beam depth, -3: batch size, -2: max length, -1: vector dim]
+                      const Expr& keys,   // [-4: beam depth=1, -3: batch size, -2: max length, -1: vector dim]
+                      const Expr& values,
+                      const Expr& mask,  // [-4: batch size, -3: num heads broadcast=1, -2: max length broadcast=1, -1: max length]
+                      bool inference = false,
+                      bool cache = false,
+                      bool collectAttention = false) {
     using namespace keywords;
 
     int dimModel = input->shape()[-1];
@@ -293,23 +323,25 @@ public:
     auto heads = options->get<int>("transformer-heads");
 
     // multi-head self-attention over previous input
-    output = MultiHead(graph,
-                       options,
-                       prefix,
-                       dimModel,
-                       heads,
-                       output,
-                       keys,
-                       values,
-                       mask,
-                       inference,
-                       cache);
+    Expr attention;
+    std::tie(output, attention) = MultiHead(graph,
+                                            options,
+                                            prefix,
+                                            dimModel,
+                                            heads,
+                                            output,
+                                            keys,
+                                            values,
+                                            mask,
+                                            inference,
+                                            cache,
+                                            collectAttention);
 
     auto opsPost = options->get<std::string>("transformer-postprocess");
     output
         = PostProcess(graph, prefix + "_Wo", opsPost, output, input, dropProb);
 
-    return output;
+    return std::make_tuple(output, attention);
   }
 
   Expr DecoderLayerSelfAttention(rnn::State& decoderState,
@@ -334,14 +366,19 @@ public:
     decoderState.output = values;
 
     // TODO: do not recompute matrix multiplies
-    return LayerAttention(graph,
+
+    Expr output, attention;
+    std::tie(output, attention) 
+         = LayerAttention(graph,
                           options,
                           prefix,
                           input,
                           values,
                           values,
                           selfMask,
-                          inference);
+                          inference,
+                          false);
+    return output;
   }
 
   Expr LayerFFN(Ptr<ExpressionGraph> graph,
@@ -594,7 +631,9 @@ public:
     // apply encoder layers
     auto encDepth = opt<int>("enc-depth");
     for(int i = 1; i <= encDepth; ++i) {
-      layer = LayerAttention(graph,
+      Expr attention;
+      std::tie(layer, attention) 
+            = LayerAttention(graph,
                              options_,
                              prefix_ + "_l" + std::to_string(i) + "_self",
                              layer,
@@ -657,6 +696,7 @@ public:
 class DecoderTransformer : public DecoderBase, public Transformer {
 protected:
   Ptr<mlp::MLP> output_;
+  std::vector<Expr> alignments_;
 
 public:
   DecoderTransformer(Ptr<Options> options) : DecoderBase(options) {}
@@ -778,6 +818,8 @@ public:
 
       decoderStates.push_back(decoderState);
 
+      bool wantAlignment = opt<bool>("alignment", false);
+
       // Iterate over multiple encoders and simply stack the attention blocks
       if(encoderContexts.size() > 0) {
         for(int j = 0; j < encoderContexts.size(); ++j) {
@@ -786,7 +828,11 @@ public:
           if(j > 0)
             prefix += "_enc" + std::to_string(j + 1);
 
-          query = LayerAttention(graph,
+          bool collectAttention = wantAlignment && j == 0 && i == 1;
+
+          Expr attention;
+          std::tie(query, attention) 
+               = LayerAttention(graph,
                                  options_,
                                  prefix,
                                  query,
@@ -794,7 +840,13 @@ public:
                                  encoderContexts[j],
                                  encoderMasks[j],
                                  inference_,
-                                 inference_);
+                                 inference_,
+                                 collectAttention);
+          
+          if(attention) {
+            alignments_.clear();
+            alignments_.push_back(attention);
+          }
         }
       }
 
@@ -846,11 +898,14 @@ public:
   }
 
   // helper function for guided alignment
-  virtual const std::vector<Expr> getAlignments(int i = 0) { return {}; }
+  virtual const std::vector<Expr> getAlignments(int i = 0) { 
+    return alignments_; 
+  }
 
   void clear() {
     output_ = nullptr;
     cache_.clear();
+    alignments_.clear();
   }
 };
 }

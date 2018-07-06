@@ -128,6 +128,14 @@ public:
   T opt(const std::string& key) {
     return options_->get<T>(key);
   }
+  
+  template <typename T>
+  T opt(const std::string& key, const T& def) {
+    if(options_->has(key))
+      return options_->get<T>(key);
+    else 
+      return def;
+  }
 
   virtual void clear() = 0;
 };
