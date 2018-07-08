@@ -30,7 +30,7 @@ Expr guidedAlignmentCost(Ptr<ExpressionGraph> graph,
   } else if(guidedCostType == "ce") {
     alnCost = -sum(flatten(aln * log(att + eps))) / dimBatch;
   } else {
-    ABORT("Unknown alignment cost type");
+    ABORT("Unknown alignment cost type: {}", guidedCostType);
   }
 
   float guidedScalar = options->get<float>("guided-alignment-weight");

@@ -90,6 +90,7 @@ public:
   }
 
   static Expr GetHead(Expr weights, int dimBeam = 1, int headOffset = 0) {
+    debug(weights, "weights");
     
     int dimWeights = weights->shape()[-1];
     int dimSteps = weights->shape()[-2];
@@ -818,7 +819,7 @@ public:
 
       decoderStates.push_back(decoderState);
 
-      bool wantAlignment = opt<bool>("alignment", false);
+      bool wantAlignment = options_->has("guided-alignment") || opt<bool>("alignment", false);
 
       // Iterate over multiple encoders and simply stack the attention blocks
       if(encoderContexts.size() > 0) {

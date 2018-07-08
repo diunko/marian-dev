@@ -39,6 +39,7 @@ add_library(marian STATIC
   layers/convolution.cpp
   layers/loss.cpp
   layers/weight.cpp
+#  layers/guided_alignment.cpp
 
   rnn/cells.cpp
   rnn/attention.cpp
