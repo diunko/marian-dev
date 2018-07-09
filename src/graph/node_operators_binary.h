@@ -740,6 +740,47 @@ struct HighwayNodeOp : public NaryNodeOp {
   const std::string type() { return "highway"; }
 };
 
+struct HighwayLinearNodeOp : public NaryNodeOp {
+  float theta_;
+
+  HighwayLinearNodeOp(const std::vector<Expr>& nodes, float theta) : NaryNodeOp(nodes), theta_{theta} {}
+
+  NodeOps forwardOps() {
+    return {NodeOp(HighwayLinearForward(
+        val_, child(0)->val(), child(1)->val(), child(2)->val(), theta_))};
+  }
+
+  NodeOps backwardOps() {
+    return {NodeOp(HighwayLinearBackward(child(0)->grad(),
+                                         child(1)->grad(),
+                                         child(2)->grad(),
+                                         child(0)->val(),
+                                         child(1)->val(),
+                                         child(2)->val(),
+                                         adj_,
+                                         theta_))};
+  }
+
+  virtual size_t hash() {
+    size_t seed = NaryNodeOp::hash();
+    boost::hash_combine(seed, theta_);
+    return seed;
+  }
+
+  virtual bool equal(Expr node) {
+    if(!NaryNodeOp::equal(node))
+      return false;
+    auto cnode = std::dynamic_pointer_cast<HighwayLinearNodeOp>(node);
+    if(!cnode)
+      return false;
+    if(theta_ != cnode->theta_)
+      return false;
+    return true;
+  }
+
+  const std::string type() { return "highwayLinear"; }
+};
+
 #ifdef CUDNN
 class ConvolutionOp : public NaryNodeOp {
 public:

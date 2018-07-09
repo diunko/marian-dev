@@ -404,6 +404,11 @@ Expr highway(Expr y, Expr x, Expr t) {
   return Expression<HighwayNodeOp>(nodes);
 }
 
+Expr highwayLinear(Expr y, Expr x, Expr t, float theta) {
+  std::vector<Expr> nodes = {y, x, t};
+  return Expression<HighwayLinearNodeOp>(nodes, theta);
+}
+
 Expr highway(const std::string prefix, Expr x) {
   // clang-format off
   size_t outDim = x->shape()[-1];

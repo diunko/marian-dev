@@ -1171,7 +1171,7 @@ void HighwayForward(Tensor out,
   size_t length = out->shape().elements();
   for(size_t i = 0; i < length; ++i) {
     float sigma = stableLogit(t->data()[i]);
-    out->data()[i] = sigma * in1->data()[i] + (1.f - sigma) * in2->data()[i]; 
+    out->data()[i] = sigma * in1->data()[i] + (1.f - sigma) * in2->data()[i];
   }
 }
 
@@ -1182,6 +1182,35 @@ void HighwayBackward(Tensor out1,
                      const Tensor in2,
                      const Tensor t,
                      const Tensor adj) {
+  ABORT("Not implemented!");
+}
+
+void HighwayLinearForward(Tensor out,
+                    const Tensor in1,
+                    const Tensor in2,
+                    const Tensor t,
+                    float theta) {
+  size_t length = out->shape().elements();
+  for(size_t i = 0; i < length; ++i) {
+    float x = t->data()[i];
+    float sigma = 0.f;
+    if(x > theta)
+      sigma = 1.f;
+    else if(x > -theta)
+      sigma = 0.5f + (0.5f / theta) * x;
+
+    out->data()[i] = sigma * in1->data()[i] + (1.f - sigma) * in2->data()[i];
+  }
+}
+
+void HighwayLinearBackward(Tensor out1,
+                     Tensor out2,
+                     Tensor outt,
+                     const Tensor in1,
+                     const Tensor in2,
+                     const Tensor t,
+                     const Tensor adj,
+                     float theta) {
   ABORT("Not implemented!");
 }
 

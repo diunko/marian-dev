@@ -71,6 +71,10 @@ public:
       auto cell = New<SSRU>(graph_, options_);
       cell->setLazyInputs(inputs_);
       return cell;
+    } else if(type == "lssru") {
+      auto cell = New<LSSRU>(graph_, options_);
+      cell->setLazyInputs(inputs_);
+      return cell;
     } else {
       ABORT("Unknown RNN cell type");
     }

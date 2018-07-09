@@ -124,6 +124,7 @@ Expr square(Expr a);
 Expr layer_norm(Expr x, Expr gamma, Expr beta = nullptr, float eps = 1e-9);
 
 Expr highway(Expr y, Expr x, Expr t);
+Expr highwayLinear(Expr y, Expr x, Expr t, float theta=0.5f);
 Expr highway(const std::string prefix, Expr x);
 
 static inline Expr dropout(Expr x, Expr mask) {

@@ -119,6 +119,9 @@ static inline void Deconcatenate(std::vector<marian::Tensor>& outputs,
   DISPATCH4(HighwayForward, marian::Tensor, const marian::Tensor, const marian::Tensor, const marian::Tensor)
   DISPATCH7(HighwayBackward, marian::Tensor, marian::Tensor, marian::Tensor, const marian::Tensor, const marian::Tensor, const marian::Tensor, const marian::Tensor)
 
+  DISPATCH5(HighwayLinearForward, marian::Tensor, const marian::Tensor, const marian::Tensor, const marian::Tensor, float)
+  DISPATCH8(HighwayLinearBackward, marian::Tensor, marian::Tensor, marian::Tensor, const marian::Tensor, const marian::Tensor, const marian::Tensor, const marian::Tensor, float)
+
   DISPATCH3(CopyRows, marian::Tensor, const marian::Tensor, const std::vector<size_t>&)
   DISPATCH3(PasteRows, marian::Tensor, const marian::Tensor, const std::vector<size_t>&)
   DISPATCH3(CopyCols, marian::Tensor, const marian::Tensor, const std::vector<size_t>&)

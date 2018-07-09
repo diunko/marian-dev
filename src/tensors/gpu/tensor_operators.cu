@@ -2194,6 +2194,100 @@ void HighwayBackward(Tensor out1,
                                         length);
 }
 
+__global__ void gHighwayLinearForward(float* out,
+                                      const float* in1,
+                                      const float* in2,
+                                      const float* t,
+                                      size_t length,
+                                      float theta) {
+  for(int bid = 0; bid < length; bid += blockDim.x * gridDim.x) {
+    int index = bid + blockDim.x * blockIdx.x + threadIdx.x;
+    if(index < length) {
+      float x = t[index];
+      float sigma = 0.f;
+      if(x > theta)
+        sigma = 1.f;
+      else if(x > -theta)
+        sigma = 0.5f + (0.5f / theta) * x;
+
+      out[index] = in1[index] * sigma + in2[index] * (1.f - sigma);
+    }
+  }
+}
+
+void HighwayLinearForward(Tensor out,
+                          const Tensor in1,
+                          const Tensor in2,
+                          const Tensor t,
+                          float theta) {
+  cudaSetDevice(out->getDevice().no);
+
+  int length = out->shape().elements();
+
+  int threads = std::min(MAX_THREADS, length);
+  int blocks = std::min(MAX_BLOCKS, length / threads + (length % threads != 0));
+
+  gHighwayLinearForward<<<blocks, threads>>>(
+      out->data(), in1->data(), in2->data(), t->data(), length, theta);
+}
+
+__global__ void gHighwayLinearBackward(float* out1,
+                                       float* out2,
+                                       float* outt,
+                                       const float* in1,
+                                       const float* in2,
+                                       const float* t,
+                                       const float* adj,
+                                       size_t length,
+                                       float theta) {
+  for(int bid = 0; bid < length; bid += blockDim.x * gridDim.x) {
+    int index = bid + blockDim.x * blockIdx.x + threadIdx.x;
+    if(index < length) {
+      float x = t[index];
+      float sigma = 0.f;
+      float dt = 0.f;
+      if(x > theta) {
+        sigma = 1.f;
+      }
+      else if(x > -theta) {
+        sigma = 0.5f + (0.5f / theta) * x;
+        dt = 0.5f / theta;
+      }
+
+      out1[index] = sigma * adj[index];
+      out2[index] = (1.f - sigma) * adj[index];
+      outt[index]
+          = dt * (in1[index] - in2[index]) * adj[index];
+    }
+  }
+}
+
+void HighwayLinearBackward(Tensor out1,
+                           Tensor out2,
+                           Tensor outt,
+                           const Tensor in1,
+                           const Tensor in2,
+                           const Tensor t,
+                           const Tensor adj,
+                           float theta) {
+  cudaSetDevice(out1->getDevice().no);
+
+  int length = out1->shape().elements();
+
+  int threads = std::min(MAX_THREADS, length);
+  int blocks = std::min(MAX_BLOCKS, length / threads + (length % threads != 0));
+
+  gHighwayLinearBackward<<<blocks, threads>>>(out1->data(),
+                                              out2->data(),
+                                              outt->data(),
+                                              in1->data(),
+                                              in2->data(),
+                                              t->data(),
+                                              adj->data(),
+                                              length,
+                                              theta);
+}
+
 __global__ void gMaxPoolingForward(float* out,
                                    int outRows,
                                    int outCols,
