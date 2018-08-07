@@ -8,6 +8,7 @@
 
 #include "functional/functional.h"
 #include "functional/tensor.h"
+#include "functional/approx.h"
 
 namespace marian {
 
@@ -1191,14 +1192,11 @@ void HighwayLinearForward(Tensor out,
                     const Tensor t,
                     float theta) {
   size_t length = out->shape().elements();
-  for(size_t i = 0; i < length; ++i) {
-    float x = t->data()[i];
-    float sigma = 0.f;
-    if(x > theta)
-      sigma = 1.f;
-    else if(x > -theta)
-      sigma = 0.5f + (0.5f / theta) * x;
 
+  functional::Approx<5, 0, 10> approxLogit(stableLogit);
+
+  for(size_t i = 0; i < length; ++i) {
+    float sigma = approxLogit(t->data()[i]);
     out->data()[i] = sigma * in1->data()[i] + (1.f - sigma) * in2->data()[i];
   }
 }

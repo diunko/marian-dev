@@ -3,6 +3,7 @@
 #include "tensors/tensor_operators.h"
 
 #include "functional/functional.h"
+#include "functional/approx.h"
 #include "functional/tensor.h"
 #include "tensors/gpu/backend.h"
 #include "tensors/gpu/cuda_helpers.h"
@@ -17,14 +18,14 @@ struct isnan_test {
   __host__ __device__ bool operator()(const float a) const { return isnan(a); }
 };
 
-__device__ inline float stableLogit(float x) {
+__host__ __device__ inline float stableLogit(float x) {
   if(x >= 0) {
     float z = expf(-x);
     return 1.0 / (1.0 + z);
-  } else {
-    float z = expf(x);
-    return z / (1.0 + z);
   }
+
+  float z = expf(x);
+  return z / (1.0 + z);
 }
 
 bool IsNan(Tensor in) {
@@ -2199,17 +2200,11 @@ __global__ void gHighwayLinearForward(float* out,
                                       const float* in2,
                                       const float* t,
                                       size_t length,
-                                      float theta) {
+                                      const functional::Approx<5,0,10> approxLogit) {
   for(int bid = 0; bid < length; bid += blockDim.x * gridDim.x) {
     int index = bid + blockDim.x * blockIdx.x + threadIdx.x;
     if(index < length) {
-      float x = t[index];
-      float sigma = 0.f;
-      if(x > theta)
-        sigma = 1.f;
-      else if(x > -theta)
-        sigma = 0.5f + (0.5f / theta) * x;
-
+      float sigma = approxLogit(t[index]);
       out[index] = in1[index] * sigma + in2[index] * (1.f - sigma);
     }
   }
@@ -2227,8 +2222,10 @@ void HighwayLinearForward(Tensor out,
   int threads = std::min(MAX_THREADS, length);
   int blocks = std::min(MAX_BLOCKS, length / threads + (length % threads != 0));
 
+  functional::Approx<5,0,10> approxLogit(stableLogit);
+
   gHighwayLinearForward<<<blocks, threads>>>(
-      out->data(), in1->data(), in2->data(), t->data(), length, theta);
+      out->data(), in1->data(), in2->data(), t->data(), length, approxLogit);
 }
 
 __global__ void gHighwayLinearBackward(float* out1,
@@ -2239,20 +2236,12 @@ __global__ void gHighwayLinearBackward(float* out1,
                                        const float* t,
                                        const float* adj,
                                        size_t length,
-                                       float theta) {
+                                       const functional::Approx<5,0,10> approxLogit) {
   for(int bid = 0; bid < length; bid += blockDim.x * gridDim.x) {
     int index = bid + blockDim.x * blockIdx.x + threadIdx.x;
     if(index < length) {
-      float x = t[index];
-      float sigma = 0.f;
-      float dt = 0.f;
-      if(x > theta) {
-        sigma = 1.f;
-      }
-      else if(x > -theta) {
-        sigma = 0.5f + (0.5f / theta) * x;
-        dt = 0.5f / theta;
-      }
+      float sigma = approxLogit(t[index]);
+      float dt = approxLogit.grad(t[index]);
 
       out1[index] = sigma * adj[index];
       out2[index] = (1.f - sigma) * adj[index];
@@ -2277,6 +2266,8 @@ void HighwayLinearBackward(Tensor out1,
   int threads = std::min(MAX_THREADS, length);
   int blocks = std::min(MAX_BLOCKS, length / threads + (length % threads != 0));
 
+  functional::Approx<5,0,10> approxLogit(stableLogit);
+
   gHighwayLinearBackward<<<blocks, threads>>>(out1->data(),
                                               out2->data(),
                                               outt->data(),
@@ -2285,7 +2276,7 @@ void HighwayLinearBackward(Tensor out1,
                                               t->data(),
                                               adj->data(),
                                               length,
-                                              theta);
+                                              approxLogit);
 }
 
 __global__ void gMaxPoolingForward(float* out,

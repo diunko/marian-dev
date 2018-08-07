@@ -54,11 +54,11 @@ public:
     if(layerNorm_) {
       if(dimInput)
         gamma1_ = graph->param(prefix + "_gamma1",
-                               {1, 3 * dimState},
-                               inits::from_value(1.f));
+                               {1, dimState},
+                               inits::ones);
       gamma2_ = graph->param(prefix + "_gamma2",
-                             {1, 3 * dimState},
-                             inits::from_value(1.f));
+                             {1, dimState},
+                             inits::ones);
     }
   }
 
@@ -104,6 +104,104 @@ public:
     }
     if(mask)
       return {output * mask, nullptr};
+    else
+      return {output, state.cell};
+  }
+};
+
+/******************************************************************************/
+
+class ReLU : public Cell {
+private:
+  Expr U_, W_, b_;
+  Expr gamma1_;
+  Expr gamma2_;
+
+  bool layerNorm_;
+  float dropout_;
+
+  Expr dropMaskX_;
+  Expr dropMaskS_;
+
+public:
+  ReLU(Ptr<ExpressionGraph> graph, Ptr<Options> options) : Cell(options) {
+    int dimInput = options_->get<int>("dimInput");
+    int dimState = options_->get<int>("dimState");
+    std::string prefix = options_->get<std::string>("prefix");
+
+    layerNorm_ = options_->get<bool>("layer-normalization", false);
+    dropout_ = options_->get<float>("dropout", 0);
+
+    U_ = graph->param(prefix + "_U",
+                      {dimState, dimState},
+                      inits::diag(1.f));
+
+    if(dimInput)
+      W_ = graph->param(prefix + "_W",
+                        {dimInput, dimState},
+                        inits::glorot_uniform);
+
+    b_ = graph->param(prefix + "_b", {1, dimState}, inits::zeros);
+
+    if(dropout_ > 0.0f) {
+      if(dimInput)
+        dropMaskX_ = graph->dropout(dropout_, {1, dimInput});
+      dropMaskS_ = graph->dropout(dropout_, {1, dimState});
+    }
+
+    if(layerNorm_) {
+      if(dimInput)
+        gamma1_ = graph->param(prefix + "_gamma1",
+                               {1, dimState},
+                               inits::ones);
+      gamma2_ = graph->param(prefix + "_gamma2",
+                             {1, dimState},
+                             inits::ones);
+    }
+  }
+
+  State apply(std::vector<Expr> inputs, State states, Expr mask = nullptr) {
+    return applyState(applyInput(inputs), states, mask);
+  }
+
+  std::vector<Expr> applyInput(std::vector<Expr> inputs) {
+    Expr input;
+    if(inputs.size() == 0)
+      return {};
+    else if(inputs.size() > 1)
+      input = concatenate(inputs, keywords::axis = -1);
+    else
+      input = inputs.front();
+
+    if(dropMaskX_)
+      input = dropout(input, dropMaskX_);
+
+    auto xW = dot(input, W_);
+
+    if(layerNorm_)
+      xW = layer_norm(xW, gamma1_);
+
+    return {xW};
+  }
+
+  State applyState(std::vector<Expr> xWs, State state, Expr mask = nullptr) {
+    Expr recState = state.output;
+
+    auto stateDropped = recState;
+    if(dropMaskS_)
+      stateDropped = dropout(recState, dropMaskS_);
+    auto sU = dot(stateDropped, U_);
+    if(layerNorm_)
+      sU = layer_norm(sU, gamma2_);
+
+    Expr output;
+    if(xWs.empty())
+      output = relu(sU + b_);
+    else {
+      output = relu(xWs.front() + sU + b_);
+    }
+    if(mask)
+      return {output * mask, state.cell};
     else
       return {output, state.cell};
   }
@@ -1077,8 +1175,9 @@ public:
     auto x = xWs[0];
     auto f = xWs[1];
 
-    auto nextCellState = highwayLinear(cellState, x, f); // rename to "gate"?
+    auto nextCellState = highwayLinear(cellState, x, f, 2.f); // rename to "gate"?
     auto nextState = relu(nextCellState);
+    //auto nextState = nextCellState;
 
     auto maskedCellState = mask ? mask * nextCellState : nextCellState;
     auto maskedState = mask ? mask * nextState : nextState;
