@@ -11,6 +11,8 @@
 #include "graph/node_operators.h"
 #include "graph/parameters.h"
 
+#include "tbb/flow_graph.h"
+
 #include <map>
 #include <unordered_set>
 
@@ -217,28 +219,61 @@ public:
 
   void checkNan(Tensor t);
 
+  typedef tbb::flow::continue_node<tbb::flow::continue_msg> node_t;
+  typedef const tbb::flow::continue_msg& msg_t;
+
   void forwardNext() {
     // @TODO: check if allocation works properly
     tensors_->clearShorttermMemory();
 
+    tbb::flow::graph flowGraph;
+    std::map<size_t, Ptr<node_t>> nodes;
+
+    auto firstNode = New<node_t>(flowGraph, [](msg_t){ });
+
     while(!nodesForward_.empty()) {
       auto v = nodesForward_.front();
+      nodesForward_.pop_front();
       v->allocate();
       v->init();
-      v->forward();
 
-      checkNan(v->val());
+      auto exec = [v,this](msg_t) {
+        v->forward();
 
-      if(v->marked_for_debug()) {
-        std::cerr << "Debug: " << v->debug_message() << " op=" << v->type()
-                  << std::endl;
-        std::cerr << v->val()->debug() << std::endl;
+        checkNan(v->val());
+
+        if(v->marked_for_debug()) {
+          std::cerr << "Debug: " << v->debug_message() << " op=" << v->type()
+                    << std::endl;
+          std::cerr << v->val()->debug() << std::endl;
+        }
+
+        if(inferenceOnly_)
+          v->children().clear();
+
+        //v = nullptr;
+      };
+
+      auto currNode = New<node_t>(flowGraph, exec);
+      if(v->children().empty()) {
+        tbb::flow::make_edge(*firstNode, *currNode);
       }
-
-      if(inferenceOnly_)
-        v->children().clear();
-      nodesForward_.pop_front();
+      else {
+        for(const auto& child : v->children()) {
+          if(nodes.count(child->getId()) == 0) {
+            tbb::flow::make_edge(*firstNode, *currNode);
+          }
+          else {
+            tbb::flow::make_edge(*nodes[child->getId()], *currNode);
+          }
+        }
+      }
+      nodes[v->getId()] = currNode;
     }
+
+    firstNode->try_put( tbb::flow::continue_msg() );
+    flowGraph.wait_for_all();
+
   }
 
   void backward(bool zero = true) {

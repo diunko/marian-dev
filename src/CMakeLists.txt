@@ -3,6 +3,7 @@ add_subdirectory(3rd_party)
 include_directories(.)
 include_directories(3rd_party)
 include_directories(3rd_party/SQLiteCpp/include)
+include_directories(3rd_party/tbb/include)
 
 add_library(marian STATIC
   common/utils.cpp
@@ -152,7 +153,7 @@ if(COMPILE_SERVER)
 endif(COMPILE_SERVER)
 
 foreach(exec ${EXECUTABLES})
-  target_link_libraries(${exec} marian ${EXT_LIBS} ${EXT_LIBS} ${CMAKE_THREAD_LIBS_INIT})
+  target_link_libraries(${exec} marian tbb_static ${EXT_LIBS} ${EXT_LIBS} ${CMAKE_THREAD_LIBS_INIT})
   if(CUDA_FOUND)
     target_link_libraries(${exec} marian marian_cuda ${EXT_LIBS} ${CMAKE_THREAD_LIBS_INIT})
     cuda_add_cublas_to_target(${exec})
