@@ -12,6 +12,7 @@
 #include "graph/parameters.h"
 
 #include "tbb/flow_graph.h"
+#include "tbb/task_scheduler_init.h"
 
 #include <map>
 #include <unordered_set>
@@ -225,9 +226,10 @@ public:
   void forwardNext() {
     // @TODO: check if allocation works properly
     tensors_->clearShorttermMemory();
-
-    tbb::flow::graph flowGraph;
     std::map<size_t, Ptr<node_t>> nodes;
+
+    tbb::task_scheduler_init init(2);
+    tbb::flow::graph flowGraph;
 
     auto firstNode = New<node_t>(flowGraph, [](msg_t){ });
 
