@@ -44,7 +44,9 @@ void Config::initialize(int argc, char** argv, cli::mode mode, bool validate) {
       }
     }
   } else {
-    auto model = get<std::vector<std::string>>("models")[0];
+    auto models = get<std::vector<std::string>>("models");
+    ABORT_IF(models.empty(), "No models given");
+    auto model = models[0];
     try {
       if(!get<bool>("ignore-model-config"))
         loadModelParameters(model);
